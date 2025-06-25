@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste do Primeiro Corredor</title>
+    <style> body { margin: 0; } </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r127/three.min.js"></script>
+    <script>
+        // --- Ambiente Básico (Sabemos que isto funciona) ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Adicionando Luz ---
+        scene.add(new THREE.AmbientLight(0x606060));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(1, 1, 0.5);
+        scene.add(dirLight);
+
+        // --- Criando os Elementos Mínimos do Labirinto ---
+        const wallSize = 2;
+        const wallHeight = 3;
+
+        // 1. O Chão
+        const floorGeometry = new THREE.PlaneGeometry(30, 30); // Um chão de 30x30
+        const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2; // Deita o plano
+        scene.add(floor);
+
+        // 2. UMA Parede
+        const wallGeometry = new THREE.BoxGeometry(wallSize, wallHeight, wallSize);
+        const wallMaterial = new THREE.MeshLambertMaterial({ color: '#886644' }); // Marrom
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(0, wallHeight / 2, -4); // Posiciona na nossa frente
+        scene.add(wall);
+
+        // 3. Posicionando a Câmera
+        camera.position.set(0, wallHeight / 2 - 0.5, 0); // Posição de um jogador
+
+        // --- Renderizando a Cena ---
+        renderer.render(scene, camera);
+
+    </script>
+</body>
+</html>
