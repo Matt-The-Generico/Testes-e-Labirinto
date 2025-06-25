@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labirinto 3D - Funcional</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; color: #fff; font-family: 'Courier New', Courier, monospace; }
+        #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .ui-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); padding: 2em; border-radius: 10px; text-align: center; z-index: 10; }
+        #win-message { display: none; }
+        h1 { margin-top: 0; }
+        button { padding: 10px 20px; font-size: 1em; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="start-screen" class="ui-overlay">
+        <h1>Labirinto 3D</h1>
+        <p>Encontre o cubo verde para vencer.</p>
+        <p><b>Controles:</b> W, A, S, D ou Setas para mover.</p>
+        <button id="start-button">Iniciar Jogo</button>
+    </div>
+    <div id="win-message" class="ui-overlay">
+        <h1>Você Venceu!</h1>
+        <p>Parabéns por escapar do labirinto.</p>
+        <button onclick="location.reload()">Jogar Novamente</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r127/three.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('start-button').addEventListener('click', () => {
+                document.getElementById('start-screen').style.display = 'none';
+                init();
+            });
+        });
+
+        // --- Variáveis Globais ---
+        let scene, camera, renderer, clock, endGoalPosition;
+        const player = {
+            object: null, // O grupo que contém a câmera
+            speed: 5.0,
+            rotationSpeed: 2.0,
+            controls: { forward: false, backward: false, left: false, right: false }
+        };
+        const wallSize = 2;
+        const wallHeight = 3;
+        const mazeLayout = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 2, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 3, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        ];
+
+        function init() {
+            // --- A Base que Funciona ---
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111122);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('game-container').appendChild(renderer.domElement);
+            scene.add(new THREE.AmbientLight(0x808080));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+            dirLight.position.set(1, 1, 0.5);
+            scene.add(dirLight);
+            clock = new THREE.Clock();
+
+            // --- Jogador ---
+            player.object = new THREE.Group();
+            player.object.add(camera);
+            scene.add(player.object);
+
+            // --- Construção do Labirinto (Sabemos que funciona) ---
+            createMaze();
+
+            // --- Adicionando Eventos e Iniciando o Loop ---
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            window.addEventListener('resize', onWindowResize);
+            animate(); // Inicia o loop de animação
+        }
+
+        function createMaze() {
+            const wallGeometry = new THREE.BoxGeometry(wallSize, wallHeight, wallSize);
+            const wallMaterial = new THREE.MeshLambertMaterial({ color: '#886644' });
+            const floorGeometry = new THREE.PlaneGeometry(mazeLayout[0].length * wallSize, mazeLayout.length * wallSize);
+            const floorMaterial = new THREE.MeshLambertMaterial({ color: '#555555' });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set((mazeLayout[0].length / 2) * wallSize - wallSize / 2, 0, (mazeLayout.length / 2) * wallSize - wallSize / 2);
+            scene.add(floor);
+            
+            for (let r = 0; r < mazeLayout.length; r++) {
+                for (let c = 0; c < mazeLayout[r].length; c++) {
+                    const x = c * wallSize;
+                    const z = r * wallSize;
+                    if (mazeLayout[r][c] === 1) {
+                        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                        wall.position.set(x, wallHeight / 2, z);
+                        scene.add(wall);
+                    } else if (mazeLayout[r][c] === 2) {
+                        player.object.position.set(x, wallHeight / 2 - 0.2, z);
+                    } else if (mazeLayout[r][c] === 3) {
+                        const endGoal = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+                        endGoalPosition = new THREE.Vector3(x, wallHeight / 2, z);
+                        endGoal.position.copy(endGoalPosition);
+                        scene.add(endGoal);
+                        const pointLight = new THREE.PointLight(0x00ff00, 2, 8);
+                        pointLight.position.copy(endGoalPosition);
+                        scene.add(pointLight);
+                    }
+                }
+            }
+        }
+        
+        // --- FUNÇÕES DE CONTROLE ---
+        function onKeyDown(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': case 'arrowup': player.controls.forward = true; break;
+                case 's': case 'arrowdown': player.controls.backward = true; break;
+                case 'a': case 'arrowleft': player.controls.left = true; break;
+                case 'd': case 'arrowright': player.controls.right = true; break;
+            }
+        }
+        function onKeyUp(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': case 'arrowup': player.controls.forward = false; break;
+                case 's': case 'arrowdown': player.controls.backward = false; break;
+                case 'a': case 'arrowleft': player.controls.left = false; break;
+                case 'd': case 'arrowright': player.controls.right = false; break;
+            }
+        }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // --- FUNÇÃO DE COLISÃO SIMPLES ---
+        function checkCollision(position) {
+            const gridX = Math.round(position.x / wallSize);
+            const gridZ = Math.round(position.z / wallSize);
+            if (gridZ < 0 || gridZ >= mazeLayout.length || gridX < 0 || gridX >= mazeLayout[0].length) return true;
+            return mazeLayout[gridZ][gridX] === 1;
+        }
+
+        // --- LOOP DE ANIMAÇÃO E LÓGICA DE MOVIMENTO (A VERSÃO MAIS SEGURA) ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            
+            // 1. Rotação
+            if (player.controls.left) player.object.rotation.y += player.rotationSpeed * deltaTime;
+            if (player.controls.right) player.object.rotation.y -= player.rotationSpeed * deltaTime;
+
+            // 2. Movimento
+const moveDirection = (player.controls.forward ? -1 : 0) + (player.controls.backward ? 1 : 0);
+            if (moveDirection !== 0) {
+                // Calcula o vetor de movimento
+                const forward = new THREE.Vector3();
+                player.object.getWorldDirection(forward);
+                const moveX = forward.x * moveDirection * player.speed * deltaTime;
+                const moveZ = forward.z * moveDirection * player.speed * deltaTime;
+
+                // Salva a posição atual e calcula a próxima
+                const currentPos = player.object.position;
+                const nextPos = { x: currentPos.x + moveX, y: currentPos.y, z: currentPos.z + moveZ };
+
+                // Checa colisão
+                if (!checkCollision(nextPos)) {
+                    currentPos.x = nextPos.x;
+                    currentPos.z = nextPos.z;
+                }
+            }
+
+            // 3. Checar vitória
+            if (endGoalPosition && player.object.position.distanceTo(endGoalPosition) < wallSize / 2) {
+                document.getElementById('win-message').style.display = 'block';
+                return; // Para o jogo
+            }
+
+            // 4. Renderiza a cena (A PARTE MAIS IMPORTANTE)
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>
